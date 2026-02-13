@@ -1,0 +1,305 @@
+// Prisma schema for HexaScan
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  ORG_MEMBER
+  ORG_VIEWER
+}
+
+enum PlanType {
+  FREE
+  CLOUD
+  SELF_HOSTED
+  ENTERPRISE
+}
+
+enum SiteStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  PENDING
+}
+
+enum AgentStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum CheckType {
+  UPTIME
+  SSL_CERTIFICATE
+  RESPONSE_TIME
+  PAGE_SPEED
+  DISK_USAGE
+  MEMORY_USAGE
+  CPU_USAGE
+  LOG_MONITORING
+  FILE_CHANGE_DETECTION
+  CMS_HEALTH
+  DATABASE_CONNECTION
+  CUSTOM
+}
+
+enum CheckStatus {
+  PASSED
+  WARNING
+  CRITICAL
+  ERROR
+  PENDING
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum NotificationChannelType {
+  EMAIL
+  SLACK
+  WEBHOOK
+  SMS
+}
+
+// Organizations
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      PlanType @default(FREE)
+  limits    Json     // Store quota limits as JSON
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  teams                Team[]
+  users                User[]
+  sites                Site[]
+  agents               Agent[]
+  notificationChannels NotificationChannel[]
+  checks               Check[]
+  checkResults         CheckResult[]
+  alerts               Alert[]
+
+  @@index([slug])
+  @@index([plan])
+}
+
+// Teams
+model Team {
+  id             String       @id @default(cuid())
+  name           String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+  sites        Site[]
+
+  @@index([organizationId])
+}
+
+// Users
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(ORG_MEMBER)
+  organizationId String
+  teamId       String?
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team          Team?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([teamId])
+}
+
+// Refresh Tokens
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Sites
+model Site {
+  id             String     @id @default(cuid())
+  name           String
+  url            String
+  organizationId String
+  teamId         String?
+  healthScore    Float      @default(100)
+  status         SiteStatus @default(PENDING)
+  metadata       Json?      // Additional site configuration
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team         Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  checks       Check[]
+  checkResults CheckResult[]
+  alerts       Alert[]
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([status])
+  @@index([healthScore])
+}
+
+// Agents
+model Agent {
+  id             String      @id @default(cuid())
+  name           String
+  apiKeyHash     String      @unique
+  organizationId String
+  status         AgentStatus @default(OFFLINE)
+  lastSeen       DateTime?
+  metadata       Json?       // Store agent capabilities, version, etc.
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checks       Check[]
+  checkResults CheckResult[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([lastSeen])
+}
+
+// Checks Configuration
+model Check {
+  id             String    @id @default(cuid())
+  name           String
+  type           CheckType
+  organizationId String
+  siteId         String
+  agentId        String?   // Null for external checks
+  schedule       String    // Cron expression
+  config         Json      // Check-specific configuration
+  weight         Float     @default(1.0) // For health score calculation
+  enabled        Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  agent        Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  results      CheckResult[]
+
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([agentId])
+  @@index([type])
+  @@index([enabled])
+}
+
+// Check Results
+model CheckResult {
+  id             String      @id @default(cuid())
+  checkId        String
+  organizationId String
+  siteId         String
+  agentId        String?
+  status         CheckStatus
+  score          Float       // 0-100 for health score calculation
+  message        String?
+  details        Json?       // Detailed check output
+  duration       Int?        // Execution time in milliseconds
+  retryCount     Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  // Relations
+  check        Check        @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  agent        Agent?       @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  alerts       Alert[]
+
+  @@index([checkId])
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Alerts
+model Alert {
+  id            String        @id @default(cuid())
+  organizationId String
+  siteId        String
+  checkResultId String
+  severity      AlertSeverity
+  message       String
+  acknowledged  Boolean       @default(false)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  checkResult  CheckResult  @relation(fields: [checkResultId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([checkResultId])
+  @@index([severity])
+  @@index([acknowledged])
+  @@index([createdAt])
+}
+
+// Notification Channels
+model NotificationChannel {
+  id             String                  @id @default(cuid())
+  name           String
+  type           NotificationChannelType
+  organizationId String
+  config         Json                    // Channel-specific configuration (encrypted)
+  enabled        Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([type])
+  @@index([enabled])
+}

@@ -1,0 +1,93 @@
+# HexaScan Agent Configuration Example
+# Copy this file to /etc/hexascan-agent/agent.yaml and customize
+
+agent:
+  # Agent identifier (auto-generated if not set)
+  id: "auto"
+
+  # Human-readable agent name
+  name: "production-web-01"
+
+  # Agent version (auto-detected)
+  version: "1.0.0"
+
+api:
+  # Central API endpoint
+  endpoint: "https://api.hexascan.com/v1"
+
+  # API key storage method (file, env)
+  api_key_source: "file"
+
+  # Path to API key file (if api_key_source is "file")
+  api_key_file: "/etc/hexascan-agent/api_key"
+
+  # Environment variable name (if api_key_source is "env")
+  api_key_env: "HEXASCAN_API_KEY"
+
+  # Polling interval in seconds
+  poll_interval: 60
+
+  # Request timeout in seconds
+  timeout: 30
+
+  # Enable TLS certificate verification
+  verify_ssl: true
+
+permissions:
+  # Permission level: read_only, safe_cleanup, full_remediation
+  level: "read_only"
+
+  # Allowed paths for file operations
+  allowed_paths:
+    - "/var/log"
+    - "/var/www"
+    - "/home"
+
+  # Denied paths (higher priority than allowed_paths)
+  denied_paths:
+    - "/etc/shadow"
+    - "/root/.ssh"
+
+checks:
+  # System checks configuration
+  system:
+    disk:
+      enabled: true
+      warning_threshold: 80
+      critical_threshold: 90
+
+    cpu:
+      enabled: true
+      warning_threshold: 80
+      critical_threshold: 95
+
+    memory:
+      enabled: true
+      warning_threshold: 85
+      critical_threshold: 95
+
+  # CMS-specific checks
+  cms:
+    magento:
+      enabled: false
+      check_var_log: true
+      check_indexers: true
+      check_cache: true
+
+    wordpress:
+      enabled: false
+      check_uploads: true
+      check_plugins: true
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Log file path
+  file: "/var/log/hexascan-agent/agent.log"
+
+  # Max log file size in MB
+  max_size_mb: 10
+
+  # Number of backup log files to keep
+  backup_count: 5

@@ -1,0 +1,722 @@
+// Prisma schema for HexaScan
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  ORG_MEMBER
+  ORG_VIEWER
+}
+
+enum PlanType {
+  FREE
+  CLOUD
+  SELF_HOSTED
+  ENTERPRISE
+}
+
+enum SiteStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  PENDING
+}
+
+enum SiteType {
+  GENERIC
+  MAGENTO2
+  WORDPRESS
+  CUSTOM
+}
+
+enum AgentStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+enum AgentTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum CheckType {
+  WEB_MONITORING
+  PAGE_SPEED
+  CRITICAL_FLOWS
+  PLAYWRIGHT_CRITICAL_FLOWS
+  DISK_USAGE
+  MEMORY_USAGE
+  CPU_USAGE
+  SYSTEM_HEALTH
+  LOG_MONITORING
+  FILESYSTEM_INTEGRITY
+  CMS_HEALTH
+  MAGENTO_HEALTH
+  WORDPRESS_HEALTH
+  DATABASE_CONNECTION
+  CUSTOM
+}
+
+enum CheckStatus {
+  PASSED
+  WARNING
+  CRITICAL
+  ERROR
+  PENDING
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum NotificationChannelType {
+  EMAIL
+  SLACK
+  WEBHOOK
+  SMS
+  TELEGRAM
+}
+
+enum EscalationIssueStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  EXHAUSTED
+}
+
+enum PlanSubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  DOWNGRADE_SCHEDULED
+}
+
+enum PlanPaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PlanChangeReason {
+  UPGRADE
+  DOWNGRADE
+  EXPIRATION
+  ADMIN_OVERRIDE
+  PAYMENT_COMPLETED
+  DOWNGRADE_SCHEDULED
+  DOWNGRADE_CANCELLED
+}
+
+// Organizations
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      PlanType @default(FREE)
+  limits    Json     // Store quota limits as JSON
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  teams                Team[]
+  users                User[]
+  sites                Site[]
+  agents               Agent[]
+  agentTasks           AgentTask[]
+  notificationChannels NotificationChannel[]
+  checks               Check[]
+  checkResults         CheckResult[]
+  alerts               Alert[]
+  escalationIssues     EscalationIssue[]
+  contacts             Contact[]
+  repositories         Repository[]
+  stripeCustomerId     String?              @unique
+  planSubscriptions    PlanSubscription[]
+  planPayments         PlanPayment[]
+  planChanges          PlanChange[]
+
+  @@index([slug])
+  @@index([plan])
+}
+
+// Contacts (for ticket escalation)
+model Contact {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  email          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sitesL1        Site[]       @relation("SiteL1Contact")
+  sitesL2        Site[]       @relation("SiteL2Contact")
+  sitesL3        Site[]       @relation("SiteL3Contact")
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([email])
+}
+
+// Teams
+model Team {
+  id             String       @id @default(cuid())
+  name           String
+  organizationId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+  sites        Site[]
+
+  @@index([organizationId])
+}
+
+// Users
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(ORG_MEMBER)
+  organizationId String
+  teamId       String?
+  totpSecret   String?
+  totpEnabled  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team          Team?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([teamId])
+}
+
+// Refresh Tokens
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Sites
+model Site {
+  id             String     @id @default(cuid())
+  name           String
+  url            String
+  siteType       SiteType   @default(GENERIC)
+  organizationId String
+  teamId         String?
+  healthScore    Float      @default(100)
+  status         SiteStatus @default(PENDING)
+  metadata       Json?      // Additional site configuration
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Ticket contact references (optional)
+  ticketL1ContactId String?  // Level 1 contact
+  ticketL2ContactId String?  // Level 2 contact
+  ticketL3ContactId String?  // Level 3 contact
+
+  // Relations
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team             Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  ticketL1Contact  Contact?           @relation("SiteL1Contact", fields: [ticketL1ContactId], references: [id], onDelete: SetNull)
+  ticketL2Contact  Contact?           @relation("SiteL2Contact", fields: [ticketL2ContactId], references: [id], onDelete: SetNull)
+  ticketL3Contact  Contact?           @relation("SiteL3Contact", fields: [ticketL3ContactId], references: [id], onDelete: SetNull)
+  checks           Check[]
+  checkResults     CheckResult[]
+  alerts           Alert[]
+  agentTasks       AgentTask[]
+  escalationIssues EscalationIssue[]
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([status])
+  @@index([healthScore])
+  @@index([siteType])
+  @@index([ticketL1ContactId])
+  @@index([ticketL2ContactId])
+  @@index([ticketL3ContactId])
+}
+
+// Agents
+model Agent {
+  id             String      @id @default(cuid())
+  name           String
+  apiKeyHash     String      @unique
+  apiKeyPrefix   String?     // First 8 chars of API key for efficient lookup
+  organizationId String
+  status         AgentStatus @default(OFFLINE)
+  lastSeen       DateTime?
+  metadata       Json?       // Store agent capabilities, version, etc.
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  checks       Check[]
+  checkResults CheckResult[]
+  tasks        AgentTask[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([lastSeen])
+  @@index([apiKeyPrefix])
+}
+
+// Agent Tasks (for manual check runs and one-time tasks)
+model AgentTask {
+  id             String         @id @default(cuid())
+  agentId        String
+  checkId        String
+  siteId         String
+  organizationId String
+  status         AgentTaskStatus @default(PENDING)
+  result         Json?          // Check result when completed
+  error          String?        // Error message if failed
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  completedAt    DateTime?
+
+  // Relations
+  agent        Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  check        Check        @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([checkId])
+  @@index([siteId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Checks Configuration
+model Check {
+  id             String    @id @default(cuid())
+  name           String
+  type           CheckType
+  organizationId String
+  siteId         String
+  agentId        String?   // Null for external checks
+  schedule       String    // Cron expression
+  config         Json      // Check-specific configuration
+  weight         Float     @default(1.0) // For health score calculation
+  enabled        Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  agent        Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  results      CheckResult[]
+  tasks        AgentTask[]
+
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([agentId])
+  @@index([type])
+  @@index([enabled])
+}
+
+// Check Results
+model CheckResult {
+  id             String      @id @default(cuid())
+  checkId        String
+  organizationId String
+  siteId         String
+  agentId        String?
+  status         CheckStatus
+  score          Float       // 0-100 for health score calculation
+  message        String?
+  details        Json?       // Detailed check output
+  duration       Int?        // Execution time in milliseconds
+  retryCount     Int         @default(0)
+  createdAt      DateTime    @default(now())
+
+  // Relations
+  check            Check             @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site             Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  agent            Agent?            @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  alerts           Alert[]
+  escalationIssues EscalationIssue[]
+
+  @@index([checkId])
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Alerts
+model Alert {
+  id            String        @id @default(cuid())
+  organizationId String
+  siteId        String
+  checkResultId String
+  severity      AlertSeverity
+  message       String
+  acknowledged  Boolean       @default(false)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  checkResult  CheckResult  @relation(fields: [checkResultId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([checkResultId])
+  @@index([severity])
+  @@index([acknowledged])
+  @@index([createdAt])
+}
+
+// Notification Channels
+model NotificationChannel {
+  id             String                  @id @default(cuid())
+  name           String
+  type           NotificationChannelType
+  organizationId String
+  config         Json                    // Channel-specific configuration (encrypted)
+  enabled        Boolean                 @default(true)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([type])
+  @@index([enabled])
+}
+
+// Escalation Issues (Tickets)
+model EscalationIssue {
+  id              String                @id @default(cuid())
+  organizationId  String
+  siteId          String
+  checkResultId   String
+  checkName       String                // Store check name for display
+  monitorType     String                // Store monitor type for display
+  status          EscalationIssueStatus @default(OPEN)
+  currentLevel    Int                   @default(1) // 1, 2, or 3
+  maxLevel        Int                   @default(1) // Highest level configured for this site
+
+  // Access token for public issue page
+  token           String                @unique
+  tokenExpiresAt  DateTime
+
+  // Level contact info (copied from site contacts at creation time)
+  level1Name      String?
+  level1Email     String?
+  level2Name      String?
+  level2Email     String?
+  level3Name      String?
+  level3Email     String?
+
+  // Timestamps for each level escalation
+  level1NotifiedAt DateTime?
+  level2NotifiedAt DateTime?
+  level3NotifiedAt DateTime?
+
+  // Resolution details
+  resolvedByName  String?               // Name of person who resolved
+  resolvedByEmail String?               // Email of person who resolved
+  resolvedAt      DateTime?
+
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  // Relations
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  site         Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  checkResult  CheckResult       @relation(fields: [checkResultId], references: [id], onDelete: Cascade)
+  events       EscalationEvent[]
+
+  @@index([organizationId])
+  @@index([siteId])
+  @@index([checkResultId])
+  @@index([status])
+  @@index([currentLevel])
+  @@index([token])
+  @@index([createdAt])
+}
+
+// Escalation Events (Ticket timeline tracking)
+model EscalationEvent {
+  id                String   @id @default(cuid())
+  escalationIssueId String
+  eventType         String   // CREATED, VIEWED, ACKNOWLEDGED, IN_PROGRESS, RESOLVED, ESCALATED, EXHAUSTED
+  level             Int?     // Which level this event relates to
+  userName          String?  // Name of user who triggered the event
+  userEmail         String?  // Email of user who triggered the event
+  message           String?  // Additional context
+  createdAt         DateTime @default(now())
+
+  // Relations
+  escalationIssue EscalationIssue @relation(fields: [escalationIssueId], references: [id], onDelete: Cascade)
+
+  @@index([escalationIssueId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// ==========================================
+// SYSTEM CONFIGURATION
+// ==========================================
+
+model SystemConfig {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  value        String   // JSON-encoded value
+  defaultValue String   // JSON-encoded original hardcoded value
+  category     String   // "escalation", "alerts", "healthScore", etc.
+  label        String   // Human-readable label for admin UI
+  description  String?  // Help text
+  valueType    String   // "number", "string", "boolean", "json"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([key])
+}
+
+model PlanDefinition {
+  id          String   @id @default(uuid())
+  plan        PlanType @unique
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  limits      Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("plan_definitions")
+}
+
+// ==========================================
+// PLAN SUBSCRIPTION & PAYMENT MODELS
+// ==========================================
+
+model PlanSubscription {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  plan             PlanType
+  status           PlanSubscriptionStatus @default(ACTIVE)
+  startsAt         DateTime
+  expiresAt        DateTime
+  stripePaymentId  String?
+  scheduledPlan    PlanType?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model PlanPayment {
+  id                    String            @id @default(cuid())
+  organizationId        String
+  amount                Decimal           @db.Decimal(10, 2)
+  plan                  PlanType
+  stripeSessionId       String?           @unique
+  stripePaymentIntentId String?
+  status                PlanPaymentStatus @default(PENDING)
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  organization          Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([stripeSessionId])
+  @@index([createdAt])
+}
+
+model PlanChange {
+  id             String           @id @default(cuid())
+  organizationId String
+  fromPlan       PlanType
+  toPlan         PlanType
+  reason         PlanChangeReason
+  effectiveAt    DateTime
+  performedBy    String?
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// REPO SCANNER MODELS
+// ==========================================
+
+enum RepositoryScanStatus {
+  PENDING
+  CLONING
+  SCANNING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum FindingSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum FindingCategory {
+  SECRET
+  BACKDOOR
+  MALWARE
+  INJECTION
+  VULNERABILITY
+  OBFUSCATION
+  DEPENDENCY
+  SECURITY_FLAW
+  DATA_EXFILTRATION
+  CRYPTO_MINER
+  OTHER
+}
+
+enum RepositoryPlatform {
+  GITHUB
+  GITLAB
+  BITBUCKET
+  AZURE_DEVOPS
+  OTHER
+}
+
+// Repository to scan
+model Repository {
+  id             String               @id @default(cuid())
+  organizationId String
+  name           String
+  url            String
+  branch         String               @default("main")
+  isPrivate      Boolean              @default(false)
+  platform       RepositoryPlatform?
+  encryptedToken String?              @db.Text
+  lastScannedAt  DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  scans        SecurityScan[]
+
+  @@unique([organizationId, url])
+  @@index([organizationId])
+  @@index([lastScannedAt])
+}
+
+// Security Scan
+model SecurityScan {
+  id             String               @id @default(cuid())
+  repositoryId   String
+  organizationId String
+  status         RepositoryScanStatus @default(PENDING)
+  currentStep    String?              // Current step description for UI
+  progress       Int                  @default(0) // 0-100 progress percentage
+
+  // Stats (populated after scan completes)
+  filesScanned   Int?
+  totalFindings  Int?
+  criticalCount  Int?
+  highCount      Int?
+  mediumCount    Int?
+  lowCount       Int?
+  infoCount      Int?
+
+  // Error handling
+  errorMessage   String?
+
+  // Timing
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  // Relations
+  repository Repository        @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  findings   SecurityFinding[]
+
+  @@index([repositoryId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Security Finding
+model SecurityFinding {
+  id          String           @id @default(cuid())
+  scanId      String
+  severity    FindingSeverity
+  category    FindingCategory
+  title       String           // Short description
+  description String           // Detailed explanation
+  filePath    String
+  lineNumber  Int?
+  codeSnippet String?          // Code context
+  pattern     String?          // Pattern that matched
+  recommendation String?       // How to fix
+  confidence  String           @default("HIGH") // HIGH, MEDIUM, LOW
+  createdAt   DateTime         @default(now())
+
+  // Relations
+  scan SecurityScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([severity])
+  @@index([category])
+}

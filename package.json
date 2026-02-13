@@ -1,0 +1,29 @@
+{
+  "name": "hexascan",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HexaScan - Website Health Monitoring System",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev --workspace=@hexascan/backend",
+    "dev:frontend": "npm run dev --workspace=@hexascan/frontend",
+    "build": "npm run build --workspaces",
+    "build:backend": "npm run build --workspace=@hexascan/backend",
+    "build:frontend": "npm run build --workspace=@hexascan/frontend",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "pg": "^8.17.1"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
