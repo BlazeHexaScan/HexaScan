@@ -8,12 +8,16 @@ import {
   logoutSchema,
   updateProfileSchema,
   changePasswordSchema,
+  passwordResetRequestSchema,
+  passwordResetSchema,
   RegisterInput,
   LoginInput,
   RefreshTokenInput,
   LogoutInput,
   UpdateProfileInput,
   ChangePasswordInput,
+  PasswordResetRequestInput,
+  PasswordResetInput,
 } from './auth.schema.js';
 import { authRateLimitConfig } from '../../shared/middleware/rate-limit.js';
 import { authenticate } from '../../shared/middleware/auth.js';
@@ -25,6 +29,8 @@ const refreshTokenJsonSchema = zodToJsonSchema(refreshTokenSchema, 'refreshToken
 const logoutJsonSchema = zodToJsonSchema(logoutSchema, 'logoutSchema');
 const updateProfileJsonSchema = zodToJsonSchema(updateProfileSchema, 'updateProfileSchema');
 const changePasswordJsonSchema = zodToJsonSchema(changePasswordSchema, 'changePasswordSchema');
+const passwordResetRequestJsonSchema = zodToJsonSchema(passwordResetRequestSchema, 'passwordResetRequestSchema');
+const passwordResetJsonSchema = zodToJsonSchema(passwordResetSchema, 'passwordResetSchema');
 
 export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   const authService = new AuthService(fastify);
@@ -273,6 +279,74 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         if (error instanceof Error) {
           const status = error.message === 'Current password is incorrect' ? 400 : 500;
           return reply.status(status).send({
+            success: false,
+            error: error.message
+          });
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Forgot password (request reset email)
+  fastify.post<{ Body: PasswordResetRequestInput }>(
+    '/forgot-password',
+    {
+      schema: {
+        body: passwordResetRequestJsonSchema
+      },
+      config: {
+        rateLimit: authRateLimitConfig
+      }
+    },
+    async (
+      request: FastifyRequest<{ Body: PasswordResetRequestInput }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        await authService.requestPasswordReset(request.body);
+
+        // Always return success to prevent email enumeration
+        return reply.status(200).send({
+          success: true,
+          message: 'If an account exists with that email, a password reset link has been sent.'
+        });
+      } catch (error) {
+        // Even on error, return success to prevent email enumeration
+        console.error('[Auth] Password reset request error:', error);
+        return reply.status(200).send({
+          success: true,
+          message: 'If an account exists with that email, a password reset link has been sent.'
+        });
+      }
+    }
+  );
+
+  // Reset password (with token)
+  fastify.post<{ Body: PasswordResetInput }>(
+    '/reset-password',
+    {
+      schema: {
+        body: passwordResetJsonSchema
+      },
+      config: {
+        rateLimit: authRateLimitConfig
+      }
+    },
+    async (
+      request: FastifyRequest<{ Body: PasswordResetInput }>,
+      reply: FastifyReply
+    ) => {
+      try {
+        await authService.resetPassword(request.body);
+
+        return reply.status(200).send({
+          success: true,
+          message: 'Password has been reset successfully. You can now log in with your new password.'
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          return reply.status(400).send({
             success: false,
             error: error.message
           });

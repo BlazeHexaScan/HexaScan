@@ -222,21 +222,59 @@ export class CheckExecutionEngine {
         return; // Job completed successfully, just don't store the result
       }
 
-      // Store the check result
-      const checkResult = await prisma.checkResult.create({
-        data: {
-          checkId,
-          organizationId,
-          siteId,
-          agentId: agentId || null,
-          status: statusMap[result.status] || CheckStatus.ERROR,
-          score: result.score,
-          message: result.message || null,
-          details: result.details || {},
-          duration: result.duration,
-          retryCount: jobData.retryCount || 0,
-        },
-      });
+      // Store the check result (update PENDING record if exists, otherwise create new)
+      let checkResult;
+      if (jobData.pendingResultId) {
+        try {
+          checkResult = await prisma.checkResult.update({
+            where: { id: jobData.pendingResultId },
+            data: {
+              status: statusMap[result.status] || CheckStatus.ERROR,
+              score: result.score,
+              message: result.message || null,
+              details: result.details || {},
+              duration: result.duration,
+              retryCount: jobData.retryCount || 0,
+            },
+          });
+        } catch (updateError: any) {
+          // P2025: Record not found (deleted between trigger and completion)
+          if (updateError.code === 'P2025') {
+            console.log(`Pending result ${jobData.pendingResultId} not found, creating new record`);
+            checkResult = await prisma.checkResult.create({
+              data: {
+                checkId,
+                organizationId,
+                siteId,
+                agentId: agentId || null,
+                status: statusMap[result.status] || CheckStatus.ERROR,
+                score: result.score,
+                message: result.message || null,
+                details: result.details || {},
+                duration: result.duration,
+                retryCount: jobData.retryCount || 0,
+              },
+            });
+          } else {
+            throw updateError;
+          }
+        }
+      } else {
+        checkResult = await prisma.checkResult.create({
+          data: {
+            checkId,
+            organizationId,
+            siteId,
+            agentId: agentId || null,
+            status: statusMap[result.status] || CheckStatus.ERROR,
+            score: result.score,
+            message: result.message || null,
+            details: result.details || {},
+            duration: result.duration,
+            retryCount: jobData.retryCount || 0,
+          },
+        });
+      }
 
       // Update site health score
       await this.sitesService.updateHealthScore(siteId);
@@ -286,23 +324,58 @@ export class CheckExecutionEngine {
         return; // Job completed, don't store failure
       }
 
-      // Store the failure as an ERROR result
-      const checkResult = await prisma.checkResult.create({
-        data: {
-          checkId,
-          organizationId,
-          siteId,
-          agentId: agentId || null,
-          status: CheckStatus.ERROR,
-          score: 0,
-          message: error.message,
-          details: {
-            error: error.stack,
+      // Store the failure as an ERROR result (update PENDING record if exists, otherwise create new)
+      let checkResult;
+      if (jobData.pendingResultId) {
+        try {
+          checkResult = await prisma.checkResult.update({
+            where: { id: jobData.pendingResultId },
+            data: {
+              status: CheckStatus.ERROR,
+              score: 0,
+              message: error.message,
+              details: { error: error.stack },
+              duration: null,
+              retryCount: jobData.retryCount || 0,
+            },
+          });
+        } catch (updateError: any) {
+          if (updateError.code === 'P2025') {
+            console.log(`Pending result ${jobData.pendingResultId} not found, creating new failure record`);
+            checkResult = await prisma.checkResult.create({
+              data: {
+                checkId,
+                organizationId,
+                siteId,
+                agentId: agentId || null,
+                status: CheckStatus.ERROR,
+                score: 0,
+                message: error.message,
+                details: { error: error.stack },
+                duration: null,
+                retryCount: jobData.retryCount || 0,
+              },
+            });
+          } else {
+            throw updateError;
+          }
+        }
+      } else {
+        checkResult = await prisma.checkResult.create({
+          data: {
+            checkId,
+            organizationId,
+            siteId,
+            agentId: agentId || null,
+            status: CheckStatus.ERROR,
+            score: 0,
+            message: error.message,
+            details: { error: error.stack },
+            duration: null,
+            retryCount: jobData.retryCount || 0,
           },
-          duration: null,
-          retryCount: jobData.retryCount || 0,
-        },
-      });
+        });
+      }
 
       // Update site health score
       await this.sitesService.updateHealthScore(siteId);

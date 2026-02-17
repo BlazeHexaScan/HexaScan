@@ -32,8 +32,8 @@ async function main(): Promise<void> {
         sites: 3,
         checksPerSite: 100,
         agents: 3,
-        notificationChannels: 3,
-        dataRetention: 3,
+        notificationChannels: 9999,
+        dataRetention: 90,
       },
     },
   });

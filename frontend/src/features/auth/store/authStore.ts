@@ -14,6 +14,7 @@ export interface User {
   teamId?: string | null;
   totpEnabled?: boolean;
   plan?: string;
+  isTrial?: boolean;
 }
 
 /**

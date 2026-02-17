@@ -66,6 +66,14 @@ export const cancelDowngrade = async (): Promise<void> => {
 };
 
 /**
+ * Start a free Cloud trial
+ */
+export const startFreeTrial = async (): Promise<{ status: string; plan: string }> => {
+  const response = await apiClient.post<ApiResponse<{ status: string; plan: string }>>('/plans/start-trial');
+  return response.data.data;
+};
+
+/**
  * Fetch plan history (payments + changes)
  */
 export const fetchPlanHistory = async (

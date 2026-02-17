@@ -57,6 +57,7 @@ export class PlansService {
       select: {
         plan: true,
         limits: true,
+        freeTrialUsedAt: true,
       },
     });
 
@@ -89,6 +90,7 @@ export class PlansService {
         expiresAt: subscription.expiresAt,
         scheduledPlan: subscription.scheduledPlan,
         daysRemaining,
+        isTrial: subscription.isTrial,
       };
     }
 
@@ -96,6 +98,7 @@ export class PlansService {
       plan: org.plan,
       subscription: subscriptionResponse,
       limits: org.limits as Record<string, unknown>,
+      freeTrialUsedAt: org.freeTrialUsedAt,
     };
   }
 
@@ -608,6 +611,99 @@ export class PlansService {
   }
 
   /**
+   * Start a free trial of the Cloud plan (one-time per organization)
+   */
+  async startFreeTrial(
+    organizationId: string,
+    userId: string
+  ): Promise<{ status: string; plan: string }> {
+    // Fetch org and validate eligibility
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { plan: true, freeTrialUsedAt: true },
+    });
+
+    if (!org) {
+      throw new Error('Organization not found');
+    }
+
+    if (org.plan !== 'FREE') {
+      throw new Error('Free trial is only available for organizations on the Free plan');
+    }
+
+    if (org.freeTrialUsedAt) {
+      throw new Error('Free trial has already been used for this organization');
+    }
+
+    // Check no prior CLOUD subscription exists
+    const priorCloudSub = await prisma.planSubscription.findFirst({
+      where: { organizationId, plan: 'CLOUD' },
+    });
+
+    if (priorCloudSub) {
+      throw new Error('Free trial is not available for organizations that have previously had a Cloud plan');
+    }
+
+    // Get CLOUD plan definition for limits
+    const cloudPlanDef = await prisma.planDefinition.findUnique({
+      where: { plan: 'CLOUD' as PlanType },
+    });
+
+    if (!cloudPlanDef || !cloudPlanDef.isActive) {
+      throw new Error('Cloud plan is not currently available');
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + PLAN_PERIOD_DAYS * 24 * 60 * 60 * 1000);
+
+    // Expire any active subscriptions
+    await prisma.planSubscription.updateMany({
+      where: {
+        organizationId,
+        status: { in: ['ACTIVE', 'DOWNGRADE_SCHEDULED'] },
+      },
+      data: { status: 'EXPIRED' },
+    });
+
+    // Create trial subscription
+    await prisma.planSubscription.create({
+      data: {
+        organizationId,
+        plan: 'CLOUD' as PlanType,
+        status: 'ACTIVE',
+        startsAt: now,
+        expiresAt,
+        isTrial: true,
+      },
+    });
+
+    // Update organization plan, limits, and mark trial as used
+    await prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        plan: 'CLOUD' as PlanType,
+        limits: cloudPlanDef.limits || {},
+        freeTrialUsedAt: now,
+      },
+    });
+
+    // Create audit record
+    await prisma.planChange.create({
+      data: {
+        organizationId,
+        fromPlan: 'FREE' as PlanType,
+        toPlan: 'CLOUD' as PlanType,
+        reason: 'FREE_TRIAL',
+        effectiveAt: now,
+        performedBy: userId,
+      },
+    });
+
+    console.log(`[Plans] Organization ${organizationId} started free Cloud trial`);
+    return { status: 'activated', plan: 'CLOUD' };
+  }
+
+  /**
    * Get payment and plan change history for an organization
    */
   async getPlanHistory(
@@ -630,6 +726,19 @@ export class PlansService {
       }),
     ]);
 
+    // Resolve performedBy user IDs to names
+    const userIds = changes
+      .map((c) => c.performedBy)
+      .filter((id): id is string => id !== null);
+    const uniqueUserIds = [...new Set(userIds)];
+    const users = uniqueUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: uniqueUserIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const userNameMap = new Map(users.map((u) => [u.id, u.name]));
+
     return {
       payments: payments.map((p) => ({
         id: p.id,
@@ -644,7 +753,7 @@ export class PlansService {
         toPlan: c.toPlan,
         reason: c.reason,
         effectiveAt: c.effectiveAt,
-        performedBy: c.performedBy,
+        performedBy: c.performedBy ? (userNameMap.get(c.performedBy) || null) : null,
         createdAt: c.createdAt,
       })),
     };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Zap, Mail, Infinity } from 'lucide-react';
+import { Check, Zap, Mail, Infinity, Gift } from 'lucide-react';
 import { PlanDefinition, PlanType } from '@/types';
 
 interface PlanCardProps {
@@ -8,6 +8,10 @@ interface PlanCardProps {
   isLoading?: boolean;
   onUpgrade: (plan: PlanType) => void;
   onDowngrade: (plan: PlanType) => void;
+  isTrialEligible?: boolean;
+  isOnTrial?: boolean;
+  onStartTrial?: () => void;
+  isTrialLoading?: boolean;
 }
 
 const PLAN_HIERARCHY: Record<PlanType, number> = {
@@ -32,11 +36,11 @@ function formatRetention(days: number): string {
 function getExtraFeatures(planType: string): string[] {
   switch (planType) {
     case 'CLOUD':
-      return ['Priority email support'];
+      return ['Priority email support (support@hexascan.app)'];
     case 'SELF_HOSTED':
-      return ['On-premise or cloud deployment', 'Priority email support', 'Community support'];
+      return ['On-premise or cloud deployment', 'Priority email support (support@hexascan.app)', 'Community support'];
     case 'ENTERPRISE':
-      return ['Fully managed server setup', 'Priority email support', 'Community support', 'Custom feature development'];
+      return ['Fully managed server setup', 'Priority email support (support@hexascan.app)', 'Community support', 'Custom feature development'];
     default:
       return [];
   }
@@ -66,6 +70,10 @@ export const PlanCard: React.FC<PlanCardProps> = ({
   isLoading,
   onUpgrade,
   onDowngrade,
+  isTrialEligible,
+  isOnTrial,
+  onStartTrial,
+  isTrialLoading,
 }) => {
   const isCurrent = plan.plan === currentPlan;
   const isUpgrade = PLAN_HIERARCHY[plan.plan] > PLAN_HIERARCHY[currentPlan];
@@ -86,7 +94,15 @@ export const PlanCard: React.FC<PlanCardProps> = ({
             : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-md'
       }`}
     >
-      {isCurrent && (
+      {isCurrent && isOnTrial && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-3 py-1 text-xs font-semibold text-white">
+            <Gift className="w-3 h-3" /> Free Trial
+          </span>
+        </div>
+      )}
+
+      {isCurrent && !isOnTrial && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
           <span className="inline-flex items-center gap-1 rounded-full bg-purple-600 px-3 py-1 text-xs font-semibold text-white">
             Current Plan
@@ -130,21 +146,38 @@ export const PlanCard: React.FC<PlanCardProps> = ({
       </ul>
 
       <div>
-        {isCurrent ? (
+        {isCurrent && isOnTrial ? (
+          <button
+            disabled
+            className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed"
+          >
+            Free Trial Active
+          </button>
+        ) : isCurrent ? (
           <button
             disabled
             className="w-full rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed"
           >
             Current Plan
           </button>
-        ) : isContactPlan ? (
+        ) : isCloud && isTrialEligible ? (
           <button
-            onClick={() => window.location.href = 'mailto:support@hexascan.app?subject=HexaScan%20' + encodeURIComponent(plan.name) + '%20Plan%20Inquiry'}
+            onClick={onStartTrial}
+            disabled={isTrialLoading}
+            className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+          >
+            {isTrialLoading ? 'Activating...' : <><Gift className="w-4 h-4" /> Start Your 1-Month Free Trial</>}
+          </button>
+        ) : isContactPlan ? (
+          <a
+            href={'mailto:support@hexascan.app?subject=HexaScan%20' + encodeURIComponent(plan.name) + '%20Plan%20Inquiry'}
+            target="_blank"
+            rel="noopener noreferrer"
             className="w-full rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
           >
             <Mail className="w-4 h-4" />
             Contact Us
-          </button>
+          </a>
         ) : isUpgrade ? (
           <button
             onClick={() => onUpgrade(plan.plan)}

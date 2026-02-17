@@ -256,7 +256,11 @@ export const EscalationIssuePage = () => {
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
               This ticket link may be invalid or expired.
-              Please check your email for a valid link.
+              Please check your email for a valid link, or contact{' '}
+              <a href="mailto:support@hexascan.app" className="text-blue-600 dark:text-blue-400 hover:underline">
+                support@hexascan.app
+              </a>{' '}
+              for assistance.
             </p>
           </div>
         </Card>

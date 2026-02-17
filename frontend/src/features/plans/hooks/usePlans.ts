@@ -6,6 +6,7 @@ import {
   verifyCheckoutSession,
   scheduleDowngrade,
   cancelDowngrade,
+  startFreeTrial,
   fetchPlanHistory,
 } from '../api/plansApi';
 
@@ -92,6 +93,20 @@ export const useCancelDowngrade = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => cancelDowngrade(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: planKeys.current() });
+      queryClient.invalidateQueries({ queryKey: planKeys.history() });
+    },
+  });
+};
+
+/**
+ * Start a free Cloud trial
+ */
+export const useStartFreeTrial = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => startFreeTrial(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: planKeys.current() });
       queryClient.invalidateQueries({ queryKey: planKeys.history() });

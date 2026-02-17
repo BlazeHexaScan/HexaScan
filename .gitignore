@@ -89,4 +89,3 @@ tmpclaude-*
 .claude/
 
 # Prisma
-prisma/migrations/

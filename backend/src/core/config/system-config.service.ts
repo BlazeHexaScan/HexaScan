@@ -425,14 +425,14 @@ class SystemConfigService {
             name: 'Free',
             description: 'Get started with basic monitoring',
             price: 0,
-            limits: { sites: 1, checksPerSite: 100, agents: 1, notificationChannels: 1, dataRetention: 1 },
+            limits: { sites: 1, checksPerSite: 100, agents: 1, notificationChannels: 1, dataRetention: 30 },
           },
           {
             plan: 'CLOUD' as const,
             name: 'Cloud',
             description: 'Managed monitoring in the cloud',
             price: 9.99,
-            limits: { sites: 3, checksPerSite: 100, agents: 3, notificationChannels: 3, dataRetention: 3 },
+            limits: { sites: 3, checksPerSite: 100, agents: 3, notificationChannels: 9999, dataRetention: 90 },
           },
           {
             plan: 'SELF_HOSTED' as const,

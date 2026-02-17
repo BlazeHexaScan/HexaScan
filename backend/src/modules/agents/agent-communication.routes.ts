@@ -215,20 +215,57 @@ export async function agentCommunicationRoutes(fastify: FastifyInstance) {
           });
         }
 
-        // Store check result
-        const checkResult = await prisma.checkResult.create({
-          data: {
-            checkId: task.checkId,
-            siteId: task.siteId,
-            organizationId: task.organizationId,
-            agentId: request.agent.id,
-            status: status as CheckStatus,
-            score,
-            message,
-            details,
-            duration: duration || 0,
-          },
-        });
+        // Store check result (update PENDING record if exists, otherwise create new)
+        let checkResult;
+        if (task.pendingResultId) {
+          try {
+            checkResult = await prisma.checkResult.update({
+              where: { id: task.pendingResultId },
+              data: {
+                agentId: request.agent.id,
+                status: status as CheckStatus,
+                score,
+                message,
+                details,
+                duration: duration || 0,
+              },
+            });
+          } catch (updateError: any) {
+            // P2025: Record not found (deleted between trigger and completion)
+            if (updateError.code === 'P2025') {
+              console.log(`Pending result ${task.pendingResultId} not found, creating new record`);
+              checkResult = await prisma.checkResult.create({
+                data: {
+                  checkId: task.checkId,
+                  siteId: task.siteId,
+                  organizationId: task.organizationId,
+                  agentId: request.agent.id,
+                  status: status as CheckStatus,
+                  score,
+                  message,
+                  details,
+                  duration: duration || 0,
+                },
+              });
+            } else {
+              throw updateError;
+            }
+          }
+        } else {
+          checkResult = await prisma.checkResult.create({
+            data: {
+              checkId: task.checkId,
+              siteId: task.siteId,
+              organizationId: task.organizationId,
+              agentId: request.agent.id,
+              status: status as CheckStatus,
+              score,
+              message,
+              details,
+              duration: duration || 0,
+            },
+          });
+        }
 
         // Trigger alert processing for CRITICAL, ERROR, or WARNING status
         if (status === 'CRITICAL' || status === 'ERROR' || status === 'WARNING') {
@@ -296,10 +333,11 @@ async function updateSiteHealthScore(siteId: string): Promise<void> {
     let weightedSum = 0;
 
     for (const check of checks) {
-      // Get latest result for this check
+      // Get latest result for this check (exclude PENDING records)
       const latestResult = await prisma.checkResult.findFirst({
         where: {
           checkId: check.id,
+          status: { not: CheckStatus.PENDING },
         },
         orderBy: {
           createdAt: 'desc',

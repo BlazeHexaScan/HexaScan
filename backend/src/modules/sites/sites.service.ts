@@ -67,12 +67,14 @@ export class SitesService {
       return {
         id: site.id,
         name: site.name,
+        description: site.description,
         url: site.url,
         siteType: site.siteType,
         organizationId: site.organizationId,
         teamId: site.teamId,
         healthScore: site.healthScore,
         status: site.status,
+        tags: site.tags,
         metadata: site.metadata,
         createdAt: site.createdAt,
         updatedAt: site.updatedAt,
@@ -144,10 +146,12 @@ export class SitesService {
     const site = await prisma.site.create({
       data: {
         name: input.name,
+        description: input.description || null,
         url: input.url,
         siteType: input.siteType,
         organizationId,
         teamId: input.teamId,
+        tags: input.tags || [],
         metadata: input.metadata || {},
         status: SiteStatus.PENDING,
         healthScore: 100,
@@ -170,12 +174,14 @@ export class SitesService {
     return {
       id: site.id,
       name: site.name,
+      description: site.description,
       url: site.url,
       siteType: site.siteType,
       organizationId: site.organizationId,
       teamId: site.teamId,
       healthScore: site.healthScore,
       status: site.status,
+      tags: site.tags,
       metadata: site.metadata,
       createdAt: site.createdAt,
       updatedAt: site.updatedAt,
@@ -253,12 +259,14 @@ export class SitesService {
     return {
       id: site.id,
       name: site.name,
+      description: site.description,
       url: site.url,
       siteType: site.siteType,
       organizationId: site.organizationId,
       teamId: site.teamId,
       healthScore: site.healthScore,
       status: site.status,
+      tags: site.tags,
       metadata: site.metadata,
       createdAt: site.createdAt,
       updatedAt: site.updatedAt,
@@ -315,10 +323,12 @@ export class SitesService {
       where: { id: siteId },
       data: {
         ...(input.name && { name: input.name }),
+        ...(input.description !== undefined && { description: input.description || null }),
         ...(input.url && { url: input.url }),
         ...(input.siteType && { siteType: input.siteType }),
         ...(input.teamId !== undefined && { teamId: input.teamId }),
         ...(input.status && { status: input.status }),
+        ...(input.tags !== undefined && { tags: input.tags }),
         ...(input.metadata && { metadata: input.metadata }),
         ...(input.ticketL1ContactId !== undefined && { ticketL1ContactId: input.ticketL1ContactId }),
         ...(input.ticketL2ContactId !== undefined && { ticketL2ContactId: input.ticketL2ContactId }),
@@ -394,12 +404,14 @@ export class SitesService {
     return {
       id: site.id,
       name: site.name,
+      description: site.description,
       url: site.url,
       siteType: site.siteType,
       organizationId: site.organizationId,
       teamId: site.teamId,
       healthScore: site.healthScore,
       status: site.status,
+      tags: site.tags,
       metadata: site.metadata,
       createdAt: site.createdAt,
       updatedAt: site.updatedAt,
@@ -479,6 +491,7 @@ export class SitesService {
         },
         include: {
           results: {
+            where: { status: { not: CheckStatus.PENDING } },
             take: 1,
             orderBy: { createdAt: 'desc' },
           },
@@ -601,15 +614,33 @@ export class SitesService {
     let agentTasksCreated = 0;
     let skippedAgentChecks = 0;
 
-    // Queue external checks to BullMQ
+    // Queue external checks to BullMQ with PENDING result records
     if (externalChecks.length > 0) {
-      const jobs = externalChecks.map((check) => ({
-        checkId: check.id,
-        organizationId,
-        siteId,
-        agentId: undefined,
-        triggeredBy: 'manual' as const,
-      }));
+      const jobs = [];
+      for (const check of externalChecks) {
+        // Create PENDING CheckResult so it appears immediately in Results tab
+        const pendingResult = await prisma.checkResult.create({
+          data: {
+            checkId: check.id,
+            siteId,
+            organizationId,
+            status: CheckStatus.PENDING,
+            score: 0,
+            duration: null,
+            message: 'Waiting for execution...',
+            details: {},
+            retryCount: 0,
+          },
+        });
+        jobs.push({
+          checkId: check.id,
+          organizationId,
+          siteId,
+          agentId: undefined,
+          triggeredBy: 'manual' as const,
+          pendingResultId: pendingResult.id,
+        });
+      }
       await queueManager.queueMultipleChecks(jobs);
       externalQueued = externalChecks.length;
     }
@@ -633,6 +664,22 @@ export class SitesService {
         continue;
       }
 
+      // Create PENDING CheckResult so it appears immediately in Results tab
+      const pendingResult = await prisma.checkResult.create({
+        data: {
+          checkId: check.id,
+          siteId: check.siteId,
+          organizationId: check.organizationId,
+          agentId: check.agentId,
+          status: CheckStatus.PENDING,
+          score: 0,
+          duration: null,
+          message: 'Waiting for execution...',
+          details: {},
+          retryCount: 0,
+        },
+      });
+
       // Create AgentTask for the agent to poll
       await prisma.agentTask.create({
         data: {
@@ -641,6 +688,7 @@ export class SitesService {
           siteId: check.siteId,
           organizationId: check.organizationId,
           status: 'PENDING',
+          pendingResultId: pendingResult.id,
         },
       });
       agentTasksCreated++;

@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   CreditCard,
   UserCircle,
+  LifeBuoy,
 } from 'lucide-react';
 
 import { clsx } from 'clsx';
@@ -138,7 +139,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           >
             <CreditCard className="w-4 h-4 text-purple-500" />
             <span className="text-gray-700 dark:text-gray-300">
-              {{ FREE: 'Free', CLOUD: 'Cloud', SELF_HOSTED: 'Self-Hosted', ENTERPRISE: 'Enterprise' }[user?.plan || 'FREE'] || user?.plan} Plan
+              {{ FREE: 'Free', CLOUD: 'Cloud', SELF_HOSTED: 'Self-Hosted', ENTERPRISE: 'Enterprise' }[user?.plan || 'FREE'] || user?.plan} {user?.isTrial ? 'Trial' : 'Plan'}
             </span>
           </NavLink>
           {isSuperAdmin && (
@@ -151,6 +152,15 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               Admin Panel
             </NavLink>
           )}
+          <a
+            href="mailto:support@hexascan.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 mb-3 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-800 transition-colors"
+          >
+            <LifeBuoy className="w-4 h-4" />
+            Support
+          </a>
           <div className="text-xs text-gray-500 dark:text-gray-400">
             Version {import.meta.env.VITE_APP_VERSION || '0.1.0'}
           </div>

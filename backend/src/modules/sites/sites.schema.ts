@@ -6,9 +6,11 @@ import { SiteStatus, SiteType } from '@prisma/client';
  */
 export const createSiteSchema = z.object({
   name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
   url: z.string().url(),
   siteType: z.nativeEnum(SiteType).optional().default('GENERIC'),
   teamId: z.string().cuid().optional(),
+  tags: z.array(z.string().max(50)).max(20).optional().default([]),
   metadata: z.record(z.any()).optional(),
   // Ticket contact IDs (optional)
   ticketL1ContactId: z.string().cuid().nullable().optional(),
@@ -31,10 +33,12 @@ export type CreateSiteInput = z.infer<typeof createSiteSchema>;
  */
 export const updateSiteSchema = z.object({
   name: z.string().min(1).max(255).optional(),
+  description: z.string().max(1000).nullable().optional(),
   url: z.string().url().optional(),
   siteType: z.nativeEnum(SiteType).optional(),
   teamId: z.string().cuid().nullable().optional(),
   status: z.nativeEnum(SiteStatus).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
   metadata: z.record(z.any()).optional(),
   // Ticket contact IDs (optional)
   ticketL1ContactId: z.string().cuid().nullable().optional(),

@@ -72,14 +72,16 @@ export const SiteSettingsTab = ({
               </label>
               <p className="mt-1 text-gray-900 dark:text-gray-100">{site.url}</p>
             </div>
-            {site.description && (
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Description
-                </label>
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Description
+              </label>
+              {site.description ? (
                 <p className="mt-1 text-gray-900 dark:text-gray-100">{site.description}</p>
-              </div>
-            )}
+              ) : (
+                <p className="mt-1 text-gray-500 dark:text-gray-400">No description</p>
+              )}
+            </div>
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Tags

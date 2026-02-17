@@ -120,6 +120,7 @@ enum PlanChangeReason {
   PAYMENT_COMPLETED
   DOWNGRADE_SCHEDULED
   DOWNGRADE_CANCELLED
+  FREE_TRIAL
 }
 
 // Organizations
@@ -146,6 +147,7 @@ model Organization {
   contacts             Contact[]
   repositories         Repository[]
   stripeCustomerId     String?              @unique
+  freeTrialUsedAt      DateTime?
   planSubscriptions    PlanSubscription[]
   planPayments         PlanPayment[]
   planChanges          PlanChange[]
@@ -207,11 +209,28 @@ model User {
   // Relations
   organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   team          Team?          @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  refreshTokens RefreshToken[]
+  refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([email])
   @@index([organizationId])
   @@index([teamId])
+}
+
+// Password Reset Tokens
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // Refresh Tokens
@@ -234,12 +253,14 @@ model RefreshToken {
 model Site {
   id             String     @id @default(cuid())
   name           String
+  description    String?
   url            String
   siteType       SiteType   @default(GENERIC)
   organizationId String
   teamId         String?
   healthScore    Float      @default(100)
   status         SiteStatus @default(PENDING)
+  tags           String[]   @default([])
   metadata       Json?      // Additional site configuration
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
@@ -304,6 +325,7 @@ model AgentTask {
   siteId         String
   organizationId String
   status         AgentTaskStatus @default(PENDING)
+  pendingResultId String?       // CheckResult ID to update on completion
   result         Json?          // Check result when completed
   error          String?        // Error message if failed
   createdAt      DateTime       @default(now())
@@ -548,6 +570,7 @@ model PlanSubscription {
   expiresAt        DateTime
   stripePaymentId  String?
   scheduledPlan    PlanType?
+  isTrial          Boolean                @default(false)
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
@@ -719,4 +742,22 @@ model SecurityFinding {
   @@index([scanId])
   @@index([severity])
   @@index([category])
+}
+
+// ==========================================
+// LEADS
+// ==========================================
+
+model Lead {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  company   String?
+  plan      String?
+  message   String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([createdAt])
 }

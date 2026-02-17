@@ -40,7 +40,29 @@ function getChangeReasonLabel(reason: string): string {
     case 'PAYMENT_COMPLETED': return 'Payment';
     case 'DOWNGRADE_SCHEDULED': return 'Downgrade Scheduled';
     case 'DOWNGRADE_CANCELLED': return 'Downgrade Cancelled';
+    case 'FREE_TRIAL': return 'Free Trial';
     default: return reason;
+  }
+}
+
+function getChangeReasonBadge(reason: string): { bg: string; text: string; label: string } {
+  switch (reason) {
+    case 'UPGRADE':
+    case 'PAYMENT_COMPLETED':
+      return { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', label: getChangeReasonLabel(reason) };
+    case 'FREE_TRIAL':
+      return { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-400', label: getChangeReasonLabel(reason) };
+    case 'DOWNGRADE':
+    case 'EXPIRATION':
+      return { bg: 'bg-red-100 dark:bg-red-900/30', text: 'text-red-700 dark:text-red-400', label: getChangeReasonLabel(reason) };
+    case 'DOWNGRADE_SCHEDULED':
+      return { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-700 dark:text-yellow-400', label: getChangeReasonLabel(reason) };
+    case 'DOWNGRADE_CANCELLED':
+      return { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-400', label: getChangeReasonLabel(reason) };
+    case 'ADMIN_OVERRIDE':
+      return { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-400', label: getChangeReasonLabel(reason) };
+    default:
+      return { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-700 dark:text-gray-400', label: getChangeReasonLabel(reason) };
   }
 }
 
@@ -109,6 +131,7 @@ export const PlanHistoryTable: React.FC<PlanHistoryTableProps> = ({ history, isL
               );
             } else {
               const change = item.data;
+              const badge = getChangeReasonBadge(change.reason);
               return (
                 <tr key={`change-${change.id}`} className="border-b border-gray-100 dark:border-gray-800">
                   <td className="py-3 px-3 text-gray-700 dark:text-gray-300">{formatDate(change.createdAt)}</td>
@@ -119,12 +142,11 @@ export const PlanHistoryTable: React.FC<PlanHistoryTableProps> = ({ history, isL
                   </td>
                   <td className="py-3 px-3 text-gray-700 dark:text-gray-300">
                     {change.fromPlan} → {change.toPlan}
-                    <span className="ml-2 text-gray-500 dark:text-gray-400 text-xs">
-                      ({getChangeReasonLabel(change.reason)})
-                    </span>
                   </td>
-                  <td className="py-3 px-3 text-right text-gray-500 dark:text-gray-400 text-xs">
-                    {change.performedBy || 'System'}
+                  <td className="py-3 px-3 text-right">
+                    <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${badge.bg} ${badge.text}`}>
+                      {badge.label}
+                    </span>
                   </td>
                 </tr>
               );

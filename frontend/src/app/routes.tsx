@@ -1,8 +1,9 @@
-import { createBrowserRouter, Navigate, useParams, useLocation } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Outlet, useParams, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth';
 import { AppShell } from '@/components/layout';
 import { AdminShell } from '@/components/layout/AdminShell';
-import { LoginPage, RegisterPage, DashboardPage, SitesPage, SiteDetailPage, AgentsPage, NotificationsPage, EscalationsPage, EscalationIssuePage, RepoScannerPage, PlansPage, ProfilePage } from '@/pages';
+import { usePageTracking } from '@/lib/utils/analytics';
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage, DashboardPage, SitesPage, SiteDetailPage, AgentsPage, NotificationsPage, EscalationsPage, EscalationIssuePage, RepoScannerPage, PlansPage, ProfilePage } from '@/pages';
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage';
 import { AdminUsersPage } from '@/pages/admin/AdminUsersPage';
 import { AdminOrganizationsPage } from '@/pages/admin/AdminOrganizationsPage';
@@ -86,9 +87,20 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 /**
+ * Root layout that tracks page views on every route change
+ */
+const RootLayout = () => {
+  usePageTracking();
+  return <Outlet />;
+};
+
+/**
  * Application routes configuration
  */
 export const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
   {
     path: '/',
     element: <Navigate to="/dashboard" replace />,
@@ -108,6 +120,18 @@ export const router = createBrowserRouter([
         <RegisterPage />
       </PublicRoute>
     ),
+  },
+  {
+    path: '/forgot-password',
+    element: (
+      <PublicRoute>
+        <ForgotPasswordPage />
+      </PublicRoute>
+    ),
+  },
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
   // Public ticket issue page (accessible via token, no auth required)
   {
@@ -196,5 +220,7 @@ export const router = createBrowserRouter([
   {
     path: '*',
     element: <Navigate to="/dashboard" replace />,
+  },
+    ],
   },
 ]);

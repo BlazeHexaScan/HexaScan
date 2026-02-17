@@ -9,6 +9,7 @@ export interface CheckExecutionJob {
   agentId?: string;
   retryCount?: number;
   triggeredBy?: 'schedule' | 'manual' | 'retry';
+  pendingResultId?: string;
 }
 
 export interface CheckExecutionResult {

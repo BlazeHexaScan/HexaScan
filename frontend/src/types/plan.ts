@@ -14,7 +14,8 @@ export type PlanChangeReason =
   | 'ADMIN_OVERRIDE'
   | 'PAYMENT_COMPLETED'
   | 'DOWNGRADE_SCHEDULED'
-  | 'DOWNGRADE_CANCELLED';
+  | 'DOWNGRADE_CANCELLED'
+  | 'FREE_TRIAL';
 
 export interface PlanSubscription {
   id: string;
@@ -24,12 +25,14 @@ export interface PlanSubscription {
   expiresAt: string;
   scheduledPlan: PlanType | null;
   daysRemaining: number;
+  isTrial: boolean;
 }
 
 export interface CurrentPlan {
   plan: PlanType;
   subscription: PlanSubscription | null;
   limits: OrganizationLimits;
+  freeTrialUsedAt: string | null;
 }
 
 export interface CheckoutSessionResponse {

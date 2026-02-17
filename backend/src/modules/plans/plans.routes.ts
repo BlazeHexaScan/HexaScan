@@ -272,6 +272,42 @@ export async function plansRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   /**
+   * POST /plans/start-trial
+   * Start a free Cloud trial (ORG_ADMIN only, one-time per org)
+   */
+  fastify.post(
+    '/start-trial',
+    {
+      preHandler: authenticate,
+      config: { rateLimit: apiRateLimitConfig },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        if (!request.user) {
+          return reply.status(401).send({ success: false, error: 'Authentication required' });
+        }
+
+        if (request.user.role !== 'ORG_ADMIN' && request.user.role !== 'SUPER_ADMIN') {
+          return reply.status(403).send({
+            success: false,
+            error: 'Only organization administrators can start a free trial',
+          });
+        }
+
+        const result = await plansService.startFreeTrial(
+          request.user.organizationId,
+          request.user.id
+        );
+
+        return reply.status(200).send({ success: true, data: result });
+      } catch (err: any) {
+        fastify.log.error({ err }, 'Failed to start free trial');
+        return reply.status(400).send({ success: false, error: err.message || 'Failed to start free trial' });
+      }
+    }
+  );
+
+  /**
    * GET /plans/history
    * Get payment and plan change history
    */

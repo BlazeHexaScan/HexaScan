@@ -75,6 +75,26 @@ export const useAuth = () => {
     navigate('/login');
   };
 
+  /**
+   * Forgot password mutation (request reset email)
+   */
+  const forgotPasswordMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const response = await apiClient.post<{ success: boolean; message: string }>('/auth/forgot-password', { email });
+      return response.data;
+    },
+  });
+
+  /**
+   * Reset password mutation (with token)
+   */
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ token, password }: { token: string; password: string }) => {
+      const response = await apiClient.post<{ success: boolean; message: string }>('/auth/reset-password', { token, password });
+      return response.data;
+    },
+  });
+
   return {
     user,
     isAuthenticated,
@@ -87,5 +107,15 @@ export const useAuth = () => {
     registerError: registerMutation.error ? getErrorMessage(registerMutation.error) : null,
     loginMutationError: loginMutation.error,
     registerMutationError: registerMutation.error,
+    forgotPassword: forgotPasswordMutation.mutate,
+    forgotPasswordAsync: forgotPasswordMutation.mutateAsync,
+    isForgotPasswordPending: forgotPasswordMutation.isPending,
+    isForgotPasswordSuccess: forgotPasswordMutation.isSuccess,
+    forgotPasswordError: forgotPasswordMutation.error ? getErrorMessage(forgotPasswordMutation.error) : null,
+    resetPassword: resetPasswordMutation.mutate,
+    resetPasswordAsync: resetPasswordMutation.mutateAsync,
+    isResetPasswordPending: resetPasswordMutation.isPending,
+    isResetPasswordSuccess: resetPasswordMutation.isSuccess,
+    resetPasswordError: resetPasswordMutation.error ? getErrorMessage(resetPasswordMutation.error) : null,
   };
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import { CreditCard, CheckCircle, XCircle, Clock, AlertTriangle, Gift } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   useAvailablePlans,
@@ -9,6 +9,7 @@ import {
   useVerifyCheckoutSession,
   useScheduleDowngrade,
   useCancelDowngrade,
+  useStartFreeTrial,
   usePlanHistory,
   planKeys,
 } from '@/features/plans/hooks/usePlans';
@@ -32,6 +33,7 @@ export const PlansPage: React.FC = () => {
   const verifyCheckout = useVerifyCheckoutSession();
   const scheduleDowngradeMutation = useScheduleDowngrade();
   const cancelDowngradeMutation = useCancelDowngrade();
+  const startTrialMutation = useStartFreeTrial();
 
   const [downgradePlan, setDowngradePlan] = useState<PlanType | null>(null);
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -91,12 +93,15 @@ export const PlansPage: React.FC = () => {
     }
   }, [searchParams, queryClient, setSearchParams]);
 
-  // Keep auth store plan in sync with the actual current plan
+  // Keep auth store plan and trial status in sync with the actual current plan
   useEffect(() => {
-    if (currentPlan?.plan && user && user.plan !== currentPlan.plan) {
-      setUser({ ...user, plan: currentPlan.plan });
+    if (currentPlan && user) {
+      const currentIsTrial = currentPlan.subscription?.isTrial === true && currentPlan.subscription?.status === 'ACTIVE';
+      if (user.plan !== currentPlan.plan || user.isTrial !== currentIsTrial) {
+        setUser({ ...user, plan: currentPlan.plan, isTrial: currentIsTrial });
+      }
     }
-  }, [currentPlan?.plan]);
+  }, [currentPlan?.plan, currentPlan?.subscription?.isTrial, currentPlan?.subscription?.status]);
 
   // Auto-dismiss banner
   useEffect(() => {
@@ -148,10 +153,25 @@ export const PlansPage: React.FC = () => {
     }
   };
 
+  const handleStartTrial = async () => {
+    try {
+      await startTrialMutation.mutateAsync();
+      setBanner({ type: 'success', message: 'Free trial activated! You now have Cloud plan features for 30 days.' });
+      if (user) {
+        setUser({ ...user, plan: 'CLOUD', isTrial: true });
+      }
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err?.message || 'Failed to start free trial';
+      setBanner({ type: 'error', message });
+    }
+  };
+
   const isAdmin = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
   const activePlan = currentPlan?.plan || (user?.plan as PlanType) || 'FREE';
   const subscription = currentPlan?.subscription;
   const hasScheduledDowngrade = subscription?.status === 'DOWNGRADE_SCHEDULED';
+  const isTrialEligible = activePlan === 'FREE' && !currentPlan?.freeTrialUsedAt;
+  const isOnTrial = subscription?.isTrial === true && subscription?.status === 'ACTIVE';
 
   return (
     <div className="space-y-6">
@@ -167,24 +187,38 @@ export const PlansPage: React.FC = () => {
           </div>
         </div>
         {subscription && (
-          <div className="flex items-center gap-3 rounded-lg bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-700 px-5 py-3">
+          <div className={`flex items-center gap-3 rounded-lg px-5 py-3 border ${
+            isOnTrial
+              ? 'bg-green-100 dark:bg-green-900/40 border-green-200 dark:border-green-700'
+              : 'bg-purple-100 dark:bg-purple-900/40 border-purple-200 dark:border-purple-700'
+          }`}>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-purple-500 dark:text-purple-400">
-                Current Plan
+              <p className={`text-xs font-medium uppercase tracking-wide ${
+                isOnTrial ? 'text-green-500 dark:text-green-400' : 'text-purple-500 dark:text-purple-400'
+              }`}>
+                {isOnTrial ? 'Free Trial' : 'Current Plan'}
               </p>
-              <p className="text-xl font-bold text-purple-900 dark:text-purple-100">
+              <p className={`text-xl font-bold ${
+                isOnTrial ? 'text-green-900 dark:text-green-100' : 'text-purple-900 dark:text-purple-100'
+              }`}>
                 {{ FREE: 'Free', CLOUD: 'Cloud', SELF_HOSTED: 'Self-Hosted', ENTERPRISE: 'Enterprise' }[subscription.plan] || subscription.plan}
               </p>
             </div>
-            <div className="w-px h-10 bg-purple-300 dark:bg-purple-600 mx-1" />
+            <div className={`w-px h-10 mx-1 ${isOnTrial ? 'bg-green-300 dark:bg-green-600' : 'bg-purple-300 dark:bg-purple-600'}`} />
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              {isOnTrial ? (
+                <Gift className="h-5 w-5 text-green-600 dark:text-green-400" />
+              ) : (
+                <Clock className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              )}
               <div>
-                <p className="text-lg font-bold text-purple-700 dark:text-purple-300 leading-tight">
+                <p className={`text-lg font-bold leading-tight ${
+                  isOnTrial ? 'text-green-700 dark:text-green-300' : 'text-purple-700 dark:text-purple-300'
+                }`}>
                   {subscription.daysRemaining} <span className="text-sm font-medium">days left</span>
                 </p>
-                <p className="text-xs text-purple-500 dark:text-purple-500">
-                  expires {new Date(subscription.expiresAt).toLocaleDateString()}
+                <p className={`text-xs ${isOnTrial ? 'text-green-500 dark:text-green-500' : 'text-purple-500 dark:text-purple-500'}`}>
+                  {isOnTrial ? 'trial ' : ''}expires {new Date(subscription.expiresAt).toLocaleDateString()}
                 </p>
               </div>
             </div>
@@ -258,6 +292,10 @@ export const PlansPage: React.FC = () => {
               isLoading={createCheckout.isPending || scheduleDowngradeMutation.isPending}
               onUpgrade={handleUpgrade}
               onDowngrade={handleDowngrade}
+              isTrialEligible={plan.plan === 'CLOUD' ? isTrialEligible : false}
+              isOnTrial={plan.plan === 'CLOUD' ? isOnTrial : false}
+              onStartTrial={handleStartTrial}
+              isTrialLoading={startTrialMutation.isPending}
             />
           ))}
         </div>
@@ -267,7 +305,11 @@ export const PlansPage: React.FC = () => {
       {!isAdmin && (
         <div className="rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Only organization administrators can change plans. Contact your admin to upgrade.
+            Only organization administrators can change plans. Contact your admin to upgrade, or reach out to{' '}
+            <a href="mailto:support@hexascan.app" className="text-purple-600 dark:text-purple-400 hover:underline font-medium">
+              support@hexascan.app
+            </a>{' '}
+            for help.
           </p>
         </div>
       )}

@@ -12,12 +12,14 @@ export interface ContactInfo {
 export interface SiteResponse {
   id: string;
   name: string;
+  description: string | null;
   url: string;
   siteType: SiteType;
   organizationId: string;
   teamId: string | null;
   healthScore: number;
   status: SiteStatus;
+  tags: string[];
   metadata: any;
   createdAt: Date;
   updatedAt: Date;

@@ -42,12 +42,14 @@ export interface PlanSubscriptionResponse {
   expiresAt: Date;
   scheduledPlan: PlanType | null;
   daysRemaining: number;
+  isTrial: boolean;
 }
 
 export interface CurrentPlanResponse {
   plan: PlanType;
   subscription: PlanSubscriptionResponse | null;
   limits: Record<string, unknown>;
+  freeTrialUsedAt: Date | null;
 }
 
 export interface CheckoutSessionResponse {

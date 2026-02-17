@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Badge, Column } from '@/components/ui';
 import { useCheckResults } from '@/features/checks';
 import { CheckResult } from '@/types';
 import { getCheckBadgeVariant, getCheckStatusLabel, getCheckTypeLabel } from '@/lib/utils/healthScore';
 import { formatRelativeTime, formatDuration, formatDate } from '@/lib/utils/formatters';
-import { ChevronDown, ChevronRight, ExternalLink, Smartphone, Monitor, Clock, Globe, Cpu, MemoryStick, HardDrive, Activity, Server, GitBranch, FilePlus, FileMinus, FileEdit, AlertTriangle, FolderGit, ShoppingCart, Package, Shield, Database, Folder, AlertCircle, CheckCircle, FolderSearch, FileCheck, File, Lock, User, Terminal, Zap, Camera, PlayCircle, XCircle, FileText, RefreshCw, Palette, Plug } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Smartphone, Monitor, Clock, Globe, Cpu, MemoryStick, HardDrive, Activity, Server, GitBranch, FilePlus, FileMinus, FileEdit, AlertTriangle, FolderGit, ShoppingCart, Package, Shield, Database, Folder, AlertCircle, CheckCircle, FolderSearch, FileCheck, File, Lock, User, Terminal, Zap, Camera, PlayCircle, XCircle, FileText, RefreshCw, Palette, Plug, Loader2 } from 'lucide-react';
 
 interface SiteResultsTabProps {
   siteId: string;
@@ -3883,8 +3883,22 @@ const formatFileSize = (bytes: number): string => {
  * Results tab showing recent monitor results
  */
 export const SiteResultsTab = ({ siteId, filterCheckId, onClearFilter }: SiteResultsTabProps) => {
-  const { data: results, isLoading } = useCheckResults(siteId, 50);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [isPolling, setIsPolling] = useState(false);
+
+  // Fetch results with optional polling when PENDING results exist
+  const { data: results, isLoading } = useCheckResults(siteId, 50, isPolling ? 3000 : false);
+
+  // Track PENDING state to enable/disable polling
+  const hasPendingResults = useMemo(() => {
+    if (!results) return false;
+    return results.some(r => r.status === 'PENDING');
+  }, [results]);
+
+  // Enable polling when PENDING results appear, disable when all resolved
+  useEffect(() => {
+    setIsPolling(hasPendingResults);
+  }, [hasPendingResults]);
 
   // Filter results if filterCheckId is provided
   const filteredResults = filterCheckId && results
@@ -3964,9 +3978,16 @@ export const SiteResultsTab = ({ siteId, filterCheckId, onClearFilter }: SiteRes
       key: 'status',
       header: 'Status',
       render: (result) => (
-        <Badge variant={getCheckBadgeVariant(result.status)}>
-          {getCheckStatusLabel(result.status)}
-        </Badge>
+        result.status === 'PENDING' ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Running...
+          </span>
+        ) : (
+          <Badge variant={getCheckBadgeVariant(result.status)}>
+            {getCheckStatusLabel(result.status)}
+          </Badge>
+        )
       ),
       width: '120px',
     },
@@ -3974,9 +3995,13 @@ export const SiteResultsTab = ({ siteId, filterCheckId, onClearFilter }: SiteRes
       key: 'score',
       header: 'Score',
       render: (result) => (
-        <span className={`text-sm font-medium ${getScoreColor(result.score)}`}>
-          {result.score}
-        </span>
+        result.status === 'PENDING' ? (
+          <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
+        ) : (
+          <span className={`text-sm font-medium ${getScoreColor(result.score)}`}>
+            {result.score}
+          </span>
+        )
       ),
       width: '80px',
       align: 'center',
@@ -3985,9 +4010,13 @@ export const SiteResultsTab = ({ siteId, filterCheckId, onClearFilter }: SiteRes
       key: 'duration',
       header: 'Duration',
       render: (result) => (
-        <span className="text-sm text-gray-600 dark:text-gray-400">
-          {result.duration ? formatDuration(result.duration) : '-'}
-        </span>
+        result.status === 'PENDING' ? (
+          <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
+        ) : (
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            {result.duration ? formatDuration(result.duration) : '-'}
+          </span>
+        )
       ),
       width: '120px',
     },
@@ -3995,6 +4024,13 @@ export const SiteResultsTab = ({ siteId, filterCheckId, onClearFilter }: SiteRes
       key: 'message',
       header: 'Message',
       render: (result) => {
+        if (result.status === 'PENDING') {
+          return (
+            <span className="text-sm text-blue-500 dark:text-blue-400 italic">
+              Waiting for execution...
+            </span>
+          );
+        }
         const { text, isError } = formatErrorMessage(result.message);
         return (
           <span
@@ -4022,11 +4058,15 @@ export const SiteResultsTab = ({ siteId, filterCheckId, onClearFilter }: SiteRes
     const showPlaywrightCriticalFlows = isPlaywrightCriticalFlowsResult(result) && isExpanded;
     const showLogMonitoring = isLogMonitoringResult(result) && isExpanded;
 
+    const isPending = result.status === 'PENDING';
+
     return (
       <div key={result.id}>
         <div
           className={`grid grid-cols-[40px_150px_1fr_120px_80px_120px_1fr] items-center py-3 px-4 border-b border-gray-100 dark:border-gray-800 ${
-            index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'
+            isPending
+              ? 'bg-blue-50/50 dark:bg-blue-900/10 animate-pulse'
+              : index % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50 dark:bg-gray-800/50'
           }`}
         >
           {columns.map((col) => (

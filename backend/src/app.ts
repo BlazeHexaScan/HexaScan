@@ -78,6 +78,7 @@ export async function createApp(): Promise<FastifyInstance> {
       const { adminRoutes } = await import('./modules/admin/index.js');
       const { publicConfigRoutes } = await import('./modules/config/public-config.routes.js');
       const { plansRoutes } = await import('./modules/plans/index.js');
+      const { leadsRoutes } = await import('./modules/leads/index.js');
 
       // Register module routes
       await app.register(organizationsRoutes, { prefix: '/organizations' });
@@ -96,6 +97,7 @@ export async function createApp(): Promise<FastifyInstance> {
       await app.register(adminRoutes, { prefix: '/admin' });
       await app.register(publicConfigRoutes, { prefix: '/config' });
       await app.register(plansRoutes, { prefix: '/plans' });
+      await app.register(leadsRoutes, { prefix: '/leads' });
     },
     { prefix: '/api/v1' }
   );

@@ -158,8 +158,8 @@ export class OrganizationsService {
 
     // Fallback to hardcoded defaults
     const fallbacks: Record<PlanType, OrganizationLimits> = {
-      FREE: { sites: 5, checksPerSite: 20, agents: 2, notificationChannels: 3, dataRetention: 3 },
-      CLOUD: { sites: 50, checksPerSite: 100, agents: 20, notificationChannels: 20, dataRetention: 7 },
+      FREE: { sites: 5, checksPerSite: 20, agents: 2, notificationChannels: 3, dataRetention: 30 },
+      CLOUD: { sites: 50, checksPerSite: 100, agents: 20, notificationChannels: 9999, dataRetention: 90 },
       SELF_HOSTED: { sites: 200, checksPerSite: 200, agents: 50, notificationChannels: 50, dataRetention: 14 },
       ENTERPRISE: { sites: 1000, checksPerSite: 500, agents: 100, notificationChannels: 100, dataRetention: 30 },
     };

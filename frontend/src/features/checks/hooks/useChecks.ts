@@ -127,11 +127,12 @@ export const useRunCheck = () => {
 /**
  * Fetch check results for a site
  */
-export const useCheckResults = (siteId: string, limit?: number) => {
+export const useCheckResults = (siteId: string, limit?: number, refetchInterval?: number | false) => {
   return useQuery({
     queryKey: [...checkKeys.siteResults(siteId), limit],
     queryFn: () => fetchCheckResults(siteId, limit),
     enabled: !!siteId,
+    refetchInterval: refetchInterval || false,
   });
 };
 

@@ -4,6 +4,7 @@ import { AppProviders } from './providers';
 import { router } from './routes';
 import { useAuthStore } from '@/features/auth';
 import { fetchPublicConfig } from '@/lib/api/publicConfig';
+import { initializeGA } from '@/lib/utils/analytics';
 
 /**
  * Auth initializer component that sets loading state
@@ -16,6 +17,8 @@ const AuthInitializer = ({ children }: { children: React.ReactNode }) => {
     setLoading(false);
     // Fetch public config on app load
     fetchPublicConfig();
+    // Initialize Google Analytics (production only)
+    initializeGA();
   }, [setLoading]);
 
   return <>{children}</>;

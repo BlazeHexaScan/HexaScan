@@ -99,24 +99,11 @@ export const useTriggerSiteScan = () => {
     mutationFn: (siteId: string) => triggerSiteScan(siteId),
     onSuccess: (_, siteId) => {
       // Invalidate all related queries immediately
+      // PENDING results will appear right away, auto-polling in Results tab handles updates
       queryClient.invalidateQueries({ queryKey: siteKeys.detail(siteId) });
       queryClient.invalidateQueries({ queryKey: siteKeys.lists() });
       queryClient.invalidateQueries({ queryKey: checkKeys.list(siteId) });
       queryClient.invalidateQueries({ queryKey: checkKeys.siteResults(siteId) });
-
-      // Poll for updates after a short delay (checks take time to complete)
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: siteKeys.detail(siteId) });
-        queryClient.invalidateQueries({ queryKey: checkKeys.list(siteId) });
-        queryClient.invalidateQueries({ queryKey: checkKeys.siteResults(siteId) });
-      }, 3000); // 3 seconds delay
-
-      // Poll again after more time
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: siteKeys.detail(siteId) });
-        queryClient.invalidateQueries({ queryKey: checkKeys.list(siteId) });
-        queryClient.invalidateQueries({ queryKey: checkKeys.siteResults(siteId) });
-      }, 6000); // 6 seconds delay
     },
   });
 };
